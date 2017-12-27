@@ -2,15 +2,22 @@ module Cards
   ( Element
   , Card
   , Comment
-  , isCard
+  , fromElement
+  , toElement
+  , isDue
   , sides
-  , resetLevel
-  , nextLevel
+  , reset
+  , update
   , showElement
   , showElements
   , parseElement
   , parseElements
   ) where
+
+import Data.List
+import Data.Time
+
+wee = EComment $ Comment "wee"
 
 data Element = ECard Card | EComment Comment
   deriving (Show)
@@ -34,16 +41,24 @@ isCard :: Element -> Bool
 isCard (ECard _) = True
 isCard _         = False
 
+fromElement :: Element -> Maybe Card
+fromElement (ECard c) = Just c
+fromElement  _        = Nothing
+
+toElement :: Card -> Element
+toElement = ECard
+
+isDue :: UTCTime -> Card -> Bool
+isDue = undefined
+
 sides :: Card -> [String]
 sides (Card _ _ _ s) = s
 
-resetTier :: Card -> Card
-resetTier (Card t l d s) = Card minBound l d s
+reset :: Card -> Card
+reset (Card t l d s) = Card minBound l d s
 
-nextTier :: Card -> Card
-nextTier c@(Card t l d s)
-  | t == maxBound = c
-  | otherwise     = Card (succ t) l d s
+update :: UTCTime -> Card -> Card
+update = undefined
 
 showElements :: [Element] -> String
 showElements = intercalate "\n\n" . map showElement
