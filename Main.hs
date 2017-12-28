@@ -69,9 +69,6 @@ mapWhileJustM f l = uncurry (++) <$> spanJustM f l
  - Dealing with Elements/Cards.
  -}
 
-learn :: UTCTime -> [Element] -> InputT IO [Element]
-learn time = mapWhileJustM (runMaybeT . askElement time)
-
 askElement :: UTCTime -> Element -> MaybeT (InputT IO) Element
 askElement time elem =
   case fromElement elem of
@@ -83,8 +80,10 @@ askCard time card = do
   if isDue time card
     then do
       (asked, unasked) <- spanM askSide $ sides card
-      mapM_ showSide $ tail unasked
-      return $ if null unasked then update time card else reset card
+      mapM_ showSide $ drop 1 unasked
+      if null unasked
+        then lift $ lift $ update time card
+        else return $ reset card
     else do
       return card
 
@@ -101,8 +100,15 @@ showSide side = do
 displaySide :: String -> InputT IO ()
 displaySide side = lift (putStrLn side)
 
-displayStats :: [Element] -> InputT IO ()
-displayStats = undefined
+{-
+ - User prompt.
+ -}
+
+learn :: UTCTime -> [Element] -> InputT IO [Element]
+learn time = mapWhileJustM (runMaybeT . askElement time)
+
+stats :: [Element] -> InputT IO ()
+stats = undefined -- TODO: Use tierName
 
 run :: UTCTime -> [Element] -> InputT IO [Element]
 run time elem = do
@@ -113,16 +119,15 @@ run time elem = do
     Just "q"     -> return elem
     Just "learn" -> learn time elem >>= run time
     Just "l"     -> learn time elem >>= run time
-    Just "show"  -> displayStats elem >> run time elem
-    Just "s"     -> displayStats elem >> run time elem
+    Just "show"  -> stats elem >> run time elem
+    Just "s"     -> stats elem >> run time elem
     Just x       -> do
       outputStrLn $ "Unknown command " ++ show x ++ "."
       run time elem
     -- Maybe save cards?
 
 main :: IO ()
-main = runInputT inputSettings loop
-  where loop :: InputT IO ()
-        loop = do
-          f <- runMaybeT $ promptYesNo "Hey, do you want apples?"
-          outputStrLn $ show f
+main = do
+  time <- getCurrentTime
+  elems <- runInputT inputSettings $ run time testElements
+  mapM_ (putStrLn . show) elems
