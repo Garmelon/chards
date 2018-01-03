@@ -18,6 +18,10 @@ inputSettings = Settings
   , autoAddHistory = True
   }
 
+-- The prompt functions use a MaybeT wrapper because they can fail at any time.
+-- This happens when the user presses ctrl+D (EOF).
+
+-- Simple yes/no prompt (defaults to yes)
 promptYesNo :: String -> MaybeT (InputT IO) Bool
 promptYesNo question = do
   i <- MaybeT $ getInputLine $ question ++ " [Y/n] "
@@ -29,12 +33,9 @@ promptYesNo question = do
       lift $ outputStrLn $ "Incorrect input: " ++ show i
       promptYesNo question
 
+-- Wait until user pressed Enter
 promptContinue :: String -> MaybeT (InputT IO) ()
 promptContinue question = void $ MaybeT $ getInputLine $ question ++ "[Enter] "
-
-{-
- - General functions for functions operating on lists within monads.
- -}
 
 -- Just span, but with monads.
 spanM :: (Monad m) => (a -> m Bool) -> [a] -> m ([a], [a])
@@ -52,36 +53,47 @@ spanM f l@(x:xs) = do
  - Dealing with Elements/Cards.
  -}
 
-countDueCards :: UTCTime -> [Element] -> Int
-countDueCards time elms = length $ filter isDueCard elms
-  where isDueCard e = fromMaybe False (isDue time <$> toCard e)
+-- Generic card counting function
+countCardsBy :: (Card -> Bool) -> [Element] -> Int
+countCardsBy f = length . filter elmF
+  where elmF e = fromMaybe False (f <$> toCard e)
 
-askCountdown :: UTCTime -> Int -> [Element] -> InputT IO [Element]
-askCountdown _ _ [] = return []
-askCountdown time left elms@(e:es) = do
-  case toCard e of
-    Nothing   -> (e :) <$> askCountdown time left es
-    Just card -> defaultTo elms $
-      if isDue time card
-        then do
-          card' <- askNthCard time card (left - 1)
-          (fromCard card' :) <$> liftedAsk time (left - 1) es
-        else do
-          (e :) <$> liftedAsk time left es
+-- Ask all cards in the list of elements which are due.
+-- When askNthCard fails, don't modify the rest of the list.
+-- This bit uses two MaybeTs inside each other, so beware :P
+askCountdown :: UTCTime -> [Element] -> InputT IO [Element]
+askCountdown _ [] = return []
+askCountdown time elms@(e:es) =
+  defaultTo elms $ do
+    result <- runMaybeT $ do
+      card <- MaybeT $ return $ toCard e
+      guard $ isDue time card
+      card' <- lift $ askCardWithInfo time card (countCardsBy (isDue time) es)
+      lift $ lift $ (fromCard card' :) <$> askCountdown time es
+    case result of
+      Nothing -> lift $ continue
+      Just r  -> return r
   where defaultTo what monad = fromMaybe what <$> runMaybeT monad
-        liftedAsk t l e' = lift $ askCountdown t l e'
+        continue = (e :) <$> askCountdown time es
 
+-- A simple right justify
 rjust :: Char -> Int -> String -> String
 rjust c l s = replicate (max 0 $ l - length s) c ++ s
 
-askNthCard :: UTCTime -> Card -> Int -> MaybeT (InputT IO) Card
-askNthCard time card left = do
+-- These functions use a MaybeT wrapper because they can fail at any time,
+-- because they use the prompt functions.
+
+-- Print out info about a card when asking it
+askCardWithInfo :: UTCTime -> Card -> Int -> MaybeT (InputT IO) Card
+askCardWithInfo time card left = do
   let t = rjust ' ' 9 $ tierName $ tier card
       l = rjust ' ' 3 $ show left
   lift $ outputStrLn ""
   lift $ outputStrLn $ "-----< tier: " ++ t ++ ", left: " ++ l ++ " >-----"
   askCard time card
 
+-- Ask the sides on a card and reset or update the card accordingly
+-- Doesn't check whether the card is due or not.
 askCard :: UTCTime -> Card -> MaybeT (InputT IO) Card
 askCard time card = do
   (_, unasked) <- spanM askSide $ sides card
@@ -110,16 +122,20 @@ displaySide side = lift (putStrLn side)
 learn :: [Element] -> InputT IO [Element]
 learn elms = do
   time <- lift $ getCurrentTime
-  askCountdown time (countDueCards time elms) elms
+  askCountdown time elms
 
 stats :: [Element] -> InputT IO ()
 stats = undefined -- TODO: Use tierName
 
+trim :: Char -> String -> String
+trim c = dropWhile (== c) . reverse . dropWhile (== c) . reverse
+
 run :: [Element] -> InputT IO [Element]
 run elms = do
   cmd <- getInputLine "%> "
-  case (map toLower) <$> cmd of
+  case trim ' ' . map toLower <$> cmd of
     Nothing      -> return elms
+    Just ""      -> run elms
     Just "quit"  -> return elms
     Just "q"     -> return elms
     Just "learn" -> learn elms >>= run
