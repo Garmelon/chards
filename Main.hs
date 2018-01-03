@@ -7,9 +7,11 @@ import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Data.Char
+import Data.Maybe
 import Data.Time
 import System.Console.Haskeline
 
+inputSettings :: Settings IO
 inputSettings = Settings
   { complete       = noCompletion
   , historyFile    = Nothing
@@ -46,46 +48,47 @@ spanM f l@(x:xs) = do
     else do
       return ([], l)
 
--- A combination of span and map, but with monads.
--- Note the line-by-line similarity to spanM.
--- Basically like spanM, but instead of splitting the list by a Bool, splits it
--- by a Maybe.
-spanJustM :: (Monad m) => (a -> m (Maybe b)) -> [a] -> m ([b], [a])
-spanJustM _ [] = return ([], [])
-spanJustM f l@(x:xs) = do
-  result <- f x
-  case result of
-    Just r -> do
-      (just, nothing) <- spanJustM f xs
-      return (r:just, nothing)
-    Nothing -> do
-      return ([], l)
-
--- Basically spanJustM, but more similar to map.
-mapWhileJustM :: (Monad m) => (a -> m (Maybe a)) -> [a] -> m [a]
-mapWhileJustM f l = uncurry (++) <$> spanJustM f l
-
 {-
  - Dealing with Elements/Cards.
  -}
 
-askElement :: UTCTime -> Element -> MaybeT (InputT IO) Element
-askElement time elem =
-  case fromElement elem of
-    Just card -> toElement <$> askCard time card
-    Nothing   -> return elem
+countDueCards :: UTCTime -> [Element] -> Int
+countDueCards time elms = length $ filter isDueCard elms
+  where isDueCard e = fromMaybe False (isDue time <$> toCard e)
+
+askCountdown :: UTCTime -> Int -> [Element] -> InputT IO [Element]
+askCountdown _ _ [] = return []
+askCountdown time left elms@(e:es) = do
+  case toCard e of
+    Nothing   -> (e :) <$> askCountdown time left es
+    Just card -> defaultTo elms $
+      if isDue time card
+        then do
+          card' <- askNthCard time card (left - 1)
+          (fromCard card' :) <$> liftedAsk time (left - 1) es
+        else do
+          (e :) <$> liftedAsk time left es
+  where defaultTo what monad = fromMaybe what <$> runMaybeT monad
+        liftedAsk t l e' = lift $ askCountdown t l e'
+
+rjust :: Char -> Int -> String -> String
+rjust c l s = replicate (max 0 $ l - length s) c ++ s
+
+askNthCard :: UTCTime -> Card -> Int -> MaybeT (InputT IO) Card
+askNthCard time card left = do
+  let t = rjust ' ' 9 $ tierName $ tier card
+      l = rjust ' ' 3 $ show left
+  lift $ outputStrLn ""
+  lift $ outputStrLn $ "-----< tier: " ++ t ++ ", left: " ++ l ++ " >-----"
+  askCard time card
 
 askCard :: UTCTime -> Card -> MaybeT (InputT IO) Card
 askCard time card = do
-  if isDue time card
-    then do
-      (asked, unasked) <- spanM askSide $ sides card
-      mapM_ showSide $ drop 1 unasked
-      if null unasked
-        then lift $ lift $ update time card
-        else return $ reset card
-    else do
-      return card
+  (_, unasked) <- spanM askSide $ sides card
+  mapM_ showSide $ drop 1 unasked
+  if null unasked
+    then lift $ lift $ update time card
+    else return $ reset time card
 
 askSide :: String -> MaybeT (InputT IO) Bool
 askSide side = do
@@ -104,30 +107,31 @@ displaySide side = lift (putStrLn side)
  - User prompt.
  -}
 
-learn :: UTCTime -> [Element] -> InputT IO [Element]
-learn time = mapWhileJustM (runMaybeT . askElement time)
+learn :: [Element] -> InputT IO [Element]
+learn elms = do
+  time <- lift $ getCurrentTime
+  askCountdown time (countDueCards time elms) elms
 
 stats :: [Element] -> InputT IO ()
 stats = undefined -- TODO: Use tierName
 
-run :: UTCTime -> [Element] -> InputT IO [Element]
-run time elem = do
+run :: [Element] -> InputT IO [Element]
+run elms = do
   cmd <- getInputLine "%> "
   case (map toLower) <$> cmd of
-    Nothing      -> return elem
-    Just "quit"  -> return elem
-    Just "q"     -> return elem
-    Just "learn" -> learn time elem >>= run time
-    Just "l"     -> learn time elem >>= run time
-    Just "show"  -> stats elem >> run time elem
-    Just "s"     -> stats elem >> run time elem
+    Nothing      -> return elms
+    Just "quit"  -> return elms
+    Just "q"     -> return elms
+    Just "learn" -> learn elms >>= run
+    Just "l"     -> learn elms >>= run
+    Just "show"  -> stats elms >> run elms
+    Just "s"     -> stats elms >> run elms
     Just x       -> do
       outputStrLn $ "Unknown command " ++ show x ++ "."
-      run time elem
+      run elms
     -- Maybe save cards?
 
 main :: IO ()
 main = do
-  time <- getCurrentTime
-  elems <- runInputT inputSettings $ run time testElements
-  mapM_ (putStrLn . show) elems
+  elms <- runInputT inputSettings $ run testElements
+  mapM_ (putStrLn . show) elms
