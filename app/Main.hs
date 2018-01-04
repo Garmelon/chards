@@ -151,4 +151,4 @@ run elms = do
 main :: IO ()
 main = do
   elms <- runInputT inputSettings $ run testElements
-  putStrLn $ show elms
+  putStrLn $ elementsToString elms
