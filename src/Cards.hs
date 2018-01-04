@@ -6,6 +6,7 @@ module Cards
   , fromCards
   , elementsToString
   , parseElements
+  , parseElementsMaybe
   , Card -- Card stuff
   , sides
   , tier
@@ -21,9 +22,14 @@ module Cards
   , testElements
   ) where
 
+import           Control.Applicative
+import           Control.Monad
 import           Data.List
 import qualified Data.Map.Strict as Map
 import           Data.Time
+import           Data.Void
+import           Text.Megaparsec
+import           Text.Megaparsec.Char
 
 -- | Contains 'Card's and comments with a certain ordering.
 -- To update some 'Card's in an 'Elements', use 'toCards' or 'toDueCards' and
@@ -65,14 +71,14 @@ data Tier = Unrevised
 -- Will be removed soon.
 testElements :: Elements
 testElements = Elements . Map.fromList. zip [1..] $
-  [ card ["first card", "really"]
-  , card ["second card", "really"]
-  , comment "first comment"
-  , card ["third card", "really"]
-  , comment "second comment"
+  [ ca ["first card", "really"]
+  , ca ["second card", "really"]
+  , co "first comment"
+  , ca ["third card", "really"]
+  , co "second comment"
   ]
-  where card = ECard . createCard someutctime
-        comment = EComment
+  where ca = ECard . createCard someutctime
+        co = EComment
         someutctime = UTCTime (ModifiedJulianDay 0) (secondsToDiffTime 0)
 
 {-
@@ -195,10 +201,10 @@ tierName SixtyFourDays = "64d"
 elementsToString :: Elements -> String
 elementsToString (Elements e) =
   let elms = map snd $ Map.toList e
-  in unlines $ intercalate ["", ""] $ map (\x -> [elementToString x]) elms
+  in unlines $ intersperse "" $ map (\x -> elementToString x) elms
 
 elementToString :: Element -> String
-elementToString (EComment str) = '#' : str
+elementToString (EComment str) = unlines ['#' : str]
 elementToString (ECard card)   = cardToString card
 
 cardToString :: Card -> String
@@ -207,12 +213,84 @@ cardToString Card{sides=s, tier=t, lastChecked=lc, offset=o} =
              ", \"last_checked\": " ++ (show $ formatTime defaultTimeLocale "%s" lc) ++
              ", \"delay\": " ++ (show $ fromEnum o) ++
              "}"
-  in unlines $ info : intersperse "::" s ++ [""] -- newline at the end
+  in unlines $ info : intersperse "::" s
 
 {-
  - Parsing
  -}
 
 -- | Not yet implemented.
-parseElements :: String -> Maybe Elements
-parseElements = undefined
+type Parser = Parsec Void String
+
+-- useful parsers
+
+followedBy :: Parser a -> Parser ()
+followedBy = void . try . lookAhead
+
+-- separates sides of cards
+cardSeparator :: Parser String
+cardSeparator = string "::" <?> "card separator"
+
+-- separates elements
+separator :: Parser ()
+separator = void newline <|> void eof <?> "separator"
+
+-- infostring
+
+infostring :: UTCTime -> Parser Card
+infostring time = do
+  _ <- string ":: "
+  card <- between (string "{") (string "}") (innerinfo time)
+  return card
+
+-- TODO: implement
+innerinfo :: UTCTime -> Parser Card
+innerinfo = undefined
+
+-- sides of a card
+
+side :: Parser String
+side = anyChar `manyTill` followedBy end
+  where end = newline >> (void cardSeparator <|> void separator)
+
+pSides :: Parser [String]
+pSides = side `sepBy1` (try $ newline >> cardSeparator >> newline)
+
+-- an actual card
+
+pCard :: UTCTime -> Parser Card
+pCard time = cardInfo time <|> cardNoInfo time
+
+cardInfo :: UTCTime -> Parser Card
+cardInfo time = do
+  Card{tier=t, lastChecked=lc, offset=o} <- infostring time
+  _ <- newline
+  s <- pSides
+  return Card{sides=s, tier=t, lastChecked=lc, offset=o}
+
+cardNoInfo :: UTCTime -> Parser Card
+cardNoInfo time = do
+  s <- pSides
+  return $ createCard time s
+
+-- an element
+
+comment :: Parser Element
+comment = char '#' >> EComment <$> (anyChar `manyTill` followedBy end)
+  where end = newline >> separator
+
+element :: UTCTime -> Parser Element
+element time = comment <|> (ECard <$> pCard time) <?> "element"
+
+-- a bunch of elements
+
+--line :: Parser Element
+--line = EComment <$> manyTill anyChar newline
+
+parseElements :: UTCTime -> Parser [Element]
+parseElements time = sepEndBy (element time) (some newline) <* eof
+
+parseElementsMaybe :: UTCTime -> String -> Maybe Elements
+parseElementsMaybe time str = do
+  elms <- parseMaybe (parseElements time) str
+  return $ Elements $ Map.fromList $ zip [1..] elms

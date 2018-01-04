@@ -7,7 +7,6 @@ import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Data.Char
-import Data.Maybe
 import Data.Time
 import System.Console.Haskeline
 
