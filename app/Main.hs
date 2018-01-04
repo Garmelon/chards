@@ -4,12 +4,14 @@ module Main
 
 import Cards
 import Control.Monad
-import Control.Monad.Trans
+import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Data.Char
 import Data.Maybe
 import Data.Time
 import System.Console.Haskeline
+
+type Input = InputT IO
 
 inputSettings :: Settings IO
 inputSettings = Settings
@@ -18,11 +20,15 @@ inputSettings = Settings
   , autoAddHistory = True
   }
 
+{-
+ - Helper functions
+ -}
+
 -- The prompt functions use a MaybeT wrapper because they can fail at any time.
 -- This happens when the user presses ctrl+D (EOF).
 
 -- Simple yes/no prompt (defaults to yes)
-promptYesNo :: String -> MaybeT (InputT IO) Bool
+promptYesNo :: String -> MaybeT Input Bool
 promptYesNo question = do
   i <- MaybeT $ getInputLine $ question ++ " [Y/n] "
   case map toLower i of
@@ -34,7 +40,7 @@ promptYesNo question = do
       promptYesNo question
 
 -- Wait until user pressed Enter
-promptContinue :: String -> MaybeT (InputT IO) ()
+promptContinue :: String -> MaybeT Input ()
 promptContinue question = void $ MaybeT $ getInputLine $ question ++ "[Enter] "
 
 -- Just span, but with monads.
@@ -49,36 +55,34 @@ spanM f l@(x:xs) = do
     else do
       return ([], l)
 
-{-
- - Dealing with Elements/Cards.
- -}
-
--- Generic card counting function
-countCardsBy :: (Card -> Bool) -> [Element] -> Int
-countCardsBy f = length . filter elmF
-  where elmF e = fromMaybe False (f <$> toCard e)
-
--- Ask all cards in the list of elements which are due.
--- When askNthCard fails, don't modify the rest of the list.
--- This bit uses two MaybeTs inside each other, so beware :P
-askCountdown :: UTCTime -> [Element] -> InputT IO [Element]
-askCountdown _ [] = return []
-askCountdown time elms@(e:es) =
-  defaultTo elms $ do
-    result <- runMaybeT $ do
-      card <- MaybeT $ return $ toCard e
-      guard $ isDue time card
-      card' <- lift $ askCardWithInfo time card (countCardsBy (isDue time) es)
-      lift $ lift $ (fromCard card' :) <$> askCountdown time es
-    case result of
-      Nothing -> lift $ continue
-      Just r  -> return r
-  where defaultTo what monad = fromMaybe what <$> runMaybeT monad
-        continue = (e :) <$> askCountdown time es
+-- A few inefficient string formatting functions
 
 -- A simple right justify
 rjust :: Char -> Int -> String -> String
 rjust c l s = replicate (max 0 $ l - length s) c ++ s
+
+-- Trims characters from the front and back of a string.
+trim :: Char -> String -> String
+trim c = dropWhile (== c) . reverse . dropWhile (== c) . reverse
+
+{-
+ - Dealing with Elements/Cards.
+ -}
+
+askElements :: UTCTime -> Elements -> Input Elements
+askElements time elms = do
+  let l = toDueCards time elms
+  -- TODO: Randomize order
+  newCards <- askCountdown time l
+  return $ updateElements elms (fromCards newCards)
+  
+askCountdown :: UTCTime -> [(Integer, Card)] -> Input [(Integer, Card)]
+askCountdown _ [] = return []
+askCountdown time l@((key, card):xs) = do
+  result <- runMaybeT $ askCardWithInfo time card (length xs)
+  case result of
+    Nothing    -> return l
+    Just card' -> ((key, card') :) <$> askCountdown time xs
 
 -- These functions use a MaybeT wrapper because they can fail at any time,
 -- because they use the prompt functions.
@@ -119,18 +123,15 @@ displaySide side = lift (putStrLn side)
  - User prompt.
  -}
 
-learn :: [Element] -> InputT IO [Element]
+learn :: Elements -> InputT IO Elements
 learn elms = do
   time <- lift $ getCurrentTime
-  askCountdown time elms
+  askElements time elms
 
-stats :: [Element] -> InputT IO ()
+stats :: Elements -> InputT IO ()
 stats = undefined -- TODO: Use tierName
 
-trim :: Char -> String -> String
-trim c = dropWhile (== c) . reverse . dropWhile (== c) . reverse
-
-run :: [Element] -> InputT IO [Element]
+run :: Elements -> InputT IO Elements
 run elms = do
   cmd <- getInputLine "%> "
   case trim ' ' . map toLower <$> cmd of
@@ -150,4 +151,4 @@ run elms = do
 main :: IO ()
 main = do
   elms <- runInputT inputSettings $ run testElements
-  mapM_ (putStrLn . show) elms
+  putStrLn $ show elms
