@@ -83,6 +83,12 @@ testElements = Elements . Map.fromList. zip [1..] $
 updateElements :: Elements -> Elements -> Elements
 updateElements (Elements old) (Elements new) = Elements $ Map.union new old
 
+-- | Convert a list of 'Card's back into an 'Elements'.
+-- As long as the same numbers are assosiated to the same cards as they were
+-- originally, this can safely be used to update the original 'Elements'.
+fromCards :: [(Integer, Card)] -> Elements
+fromCards = Elements . Map.fromList . mapSnd fromCard
+
 -- | Extract all 'Card's from an 'Elements'.
 -- Entries may be deleted or modified, as long as the numbers are not changed
 -- and stay associated to their original 'Card'.
@@ -95,12 +101,6 @@ toCards (Elements elms) =
 -- and stay associated to their original 'Card'.
 toDueCards :: UTCTime -> Elements -> [(Integer, Card)]
 toDueCards time = filter (isDue time . snd) . toCards
-
--- | Convert a list of 'Card's back into an 'Elements'.
--- As long as the same numbers are assosiated to the same cards as they were
--- originally, this can safely be used to update the original 'Elements'.
-fromCards :: [(Integer, Card)] -> Elements
-fromCards = Elements . Map.fromList . mapSnd fromCard
 
 mapSnd :: (b -> c) -> [(a, b)] -> [(a, c)]
 mapSnd f l = [(a, f b) | (a, b) <- l]
