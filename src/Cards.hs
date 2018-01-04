@@ -4,6 +4,7 @@ module Cards
   , toCards
   , toDueCards
   , fromCards
+  , elementsToString
   , Card -- Card stuff
   , sides
   , tier
@@ -19,6 +20,7 @@ module Cards
   , testElements
   ) where
 
+import           Data.List
 import qualified Data.Map.Strict as Map
 import           Data.Time
 
@@ -151,7 +153,22 @@ tierName SixtyFourDays = "64d"
  - Converting to String
  -}
 
--- TODO
+elementsToString :: Elements -> String
+elementsToString (Elements e) =
+  let elms = map snd $ Map.toList e
+  in unlines $ intercalate ["", ""] $ map (\x -> [elementToString x]) elms
+
+elementToString :: Element -> String
+elementToString (EComment str) = '#' : str
+elementToString (ECard card)   = cardToString card
+
+cardToString :: Card -> String
+cardToString Card{sides=s, tier=t, lastChecked=lc, offset=o} =
+  let info = ":: {\"level\": " ++ (show $ fromEnum t) ++
+             ", \"last_checked\": " ++ (show $ formatTime defaultTimeLocale "%s" lc) ++
+             ", \"delay\": " ++ (show $ fromEnum o) ++
+             "}"
+  in unlines $ info : intersperse "::" s
 
 {-
  - Parsing
