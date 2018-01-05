@@ -25,7 +25,7 @@ module Cards
 import           Control.Applicative
 import           Control.Monad
 import           Data.List
-import qualified Data.Map.Strict as Map
+import qualified Data.Map.Strict      as Map
 import           Data.Time
 import           Data.Void
 import           Text.Megaparsec
@@ -46,16 +46,16 @@ data Element = ECard Card
 
 -- | A single index card with one or more sides.
 data Card = Card
-  { sides :: [String]
+  { sides       :: [String]
   -- ^ The sides of a 'Card'.
   --
   -- As opposed to real index cards, a 'Card' may have more or less than two
   -- sides.
-  , tier :: Tier
+  , tier        :: Tier
   -- ^ The 'Tier' of a 'Card'.
   , lastChecked :: UTCTime
   -- ^ The time a 'Card' was last looked at.
-  , offset :: NominalDiffTime
+  , offset      :: NominalDiffTime
   -- ^ A random offset, used when determining whether a 'Card' needs to be
   -- revised.
   --

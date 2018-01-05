@@ -2,14 +2,14 @@ module Main
   ( main
   ) where
 
-import Cards
-import Control.Monad
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Maybe
-import Data.Char
-import Data.Time
-import System.Console.Haskeline
-import System.Console.Haskeline.History
+import           Cards
+import           Control.Monad
+import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Maybe
+import           Data.Char
+import           Data.Time
+import           System.Console.Haskeline
+import           System.Console.Haskeline.History
 
 type Input = InputT IO
 
@@ -75,7 +75,7 @@ askElements time elms = do
   -- TODO: Randomize order
   newCards <- askCountdown time l
   return $ updateElements elms (fromCards newCards)
-  
+
 askCountdown :: UTCTime -> [(Integer, Card)] -> Input [(Integer, Card)]
 askCountdown _ [] = return []
 askCountdown time l@((key, card):xs) = do
