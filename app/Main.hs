@@ -219,4 +219,6 @@ main = runInputT inputSettings $ do
   args <- lift $ getArgs
   if length args == 1
     then fromFile (args !! 0)
-    else outputStrLn $ "  USAGE: " ++ name ++ " <cards file>"
+    else do
+      outputStrLn $ "  USAGE: " ++ name ++ " <cards file>"
+      void $ runMaybeT $ promptContinue "Continue"

@@ -219,7 +219,6 @@ cardToString :: Card -> [String]
 cardToString Card{sides=s, tier=t, lastChecked=lc, offset=o}
   | t == minBound =
     let info = ":: {\"level\": " ++ (show $ fromEnum t) ++
-               ", \"last_checked\": " ++ formatTime defaultTimeLocale "%s" lc ++
                "}"
     in info : intersperse "::" s
   | otherwise     =
