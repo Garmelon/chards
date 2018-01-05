@@ -1,3 +1,4 @@
+-- | Index-card-like system.
 module Cards
   ( Elements -- Elements stuff
   , updateElements
@@ -30,6 +31,7 @@ import qualified Data.Map.Strict            as Map
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Data.Void
+import           System.Random
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -143,11 +145,11 @@ isDue time Card{tier=t, lastChecked=lc, offset=o} =
   diffUTCTime time lc >= o + tierDiff t
 
 -- These functions use the IO monad for generating random offsets.
---
--- TODO: actually implement random offset
 updateOffset :: Card -> IO Card
 updateOffset Card{sides=s, tier=t, lastChecked=lc} = do
-  return Card{sides=s, tier=t, lastChecked=lc, offset=0}
+  let maxOffset = tierDiff t / 4
+  o <- integerToNom <$> randomRIO (0, nomToInteger maxOffset)
+  return Card{sides=s, tier=t, lastChecked=lc, offset=o}
 
 -- | Reset a card's 'Tier'.
 --
@@ -210,6 +212,12 @@ tierName SixtyFourDays = "64d"
  - Converting to String
  -}
 
+integerToNom :: Integer -> NominalDiffTime
+integerToNom = fromInteger
+
+nomToInteger :: NominalDiffTime -> Integer
+nomToInteger = (truncate :: Double -> Integer) . realToFrac
+
 -- | Convert an 'Elements' to a string which can be parsed by 'parseElements'.
 --
 -- This string can then be written to a text file for storage.
@@ -226,7 +234,7 @@ cardToString :: Card -> String
 cardToString Card{sides=s, tier=t, lastChecked=lc, offset=o} =
   let info = ":: {\"level\": " ++ (show $ fromEnum t) ++
              ", \"last_checked\": " ++ formatTime defaultTimeLocale "%s" lc ++
-             ", \"delay\": " ++ (show $ fromEnum o) ++
+             ", \"delay\": " ++ (show $ nomToInteger o) ++
              "}"
   in unlines $ info : intersperse "::" s
 
@@ -295,7 +303,7 @@ lastCheckedInfo = do
 offsetInfo :: Parser (Card -> Card)
 offsetInfo = do
   number <- field "delay"
-  let o = fromInteger number
+  let o = integerToNom number
   return (\card -> card {offset=o})
 
 -- sides of a card

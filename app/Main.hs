@@ -10,6 +10,7 @@ import           Data.Char
 import           Data.Time
 import           System.Console.Haskeline
 import           System.Console.Haskeline.History
+import           System.Random.Shuffle
 
 type Input = InputT IO
 
@@ -75,9 +76,8 @@ trim c = dropWhile (== c) . reverse . dropWhile (== c) . reverse
 
 askElements :: UTCTime -> Elements -> Input Elements
 askElements time elms = do
-  let l = toDueCards time elms
-  -- TODO: Randomize order
-  newCards <- askCountdown time l
+  cards <- lift $ shuffleM $ toDueCards time elms
+  newCards <- askCountdown time cards
   return $ updateElements elms (fromCards newCards)
 
 askCountdown :: UTCTime -> [(Integer, Card)] -> Input [(Integer, Card)]

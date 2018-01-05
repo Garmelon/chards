@@ -26,6 +26,8 @@ dependencies:
 - transformers
 - haskeline
 - megaparsec
+- random
+- random-shuffle
 
 library:
   source-dirs: src
