@@ -32,6 +32,7 @@ import           Text.Megaparsec
 import           Text.Megaparsec.Char
 
 -- | Contains 'Card's and comments with a certain ordering.
+--
 -- To update some 'Card's in an 'Elements', use 'toCards' or 'toDueCards' and
 -- 'fromCards'.
 -- 'Card's can be removed (not added), as long as the numbers
@@ -47,6 +48,7 @@ data Element = ECard Card
 data Card = Card
   { sides :: [String]
   -- ^ The sides of a 'Card'.
+  --
   -- As opposed to real index cards, a 'Card' may have more or less than two
   -- sides.
   , tier :: Tier
@@ -56,10 +58,12 @@ data Card = Card
   , offset :: NominalDiffTime
   -- ^ A random offset, used when determining whether a 'Card' needs to be
   -- revised.
+  --
   -- This is to "stretch out" cards revised in a short time frame.
   } deriving (Show)
 
 -- | The "level" of a 'Card' in a typical index card learning scheme.
+--
 -- Represents the time which should elapse before the 'Card' is looked at again.
 data Tier = Unrevised
           | TenMin | TwentyMin | FortyMin
@@ -68,7 +72,8 @@ data Tier = Unrevised
   deriving (Show, Eq, Ord, Enum, Bounded)
 
 -- | A 'Elements' containing some cards and some comments, for testing.
--- Will be removed soon.
+--
+-- To be removed.
 testElements :: Elements
 testElements = Elements . Map.fromList. zip [1..] $
   [ ca ["first card", "really"]
@@ -90,19 +95,22 @@ updateElements :: Elements -> Elements -> Elements
 updateElements (Elements old) (Elements new) = Elements $ Map.union new old
 
 -- | Convert a list of 'Card's back into an 'Elements'.
+--
 -- As long as the same numbers are assosiated to the same cards as they were
 -- originally, this can safely be used to update the original 'Elements'.
 fromCards :: [(Integer, Card)] -> Elements
 fromCards = Elements . Map.fromList . mapSnd fromCard
 
 -- | Extract all 'Card's from an 'Elements'.
--- Entries may be deleted or modified, as long as the numbers are not changed
+--
+-- Entries may be deleted or modified as long as the numbers are not changed
 -- and stay associated to their original 'Card'.
 toCards :: Elements -> [(Integer, Card)]
 toCards (Elements elms) =
   [(key, card) | (key, Just card) <- mapSnd toCard $ Map.toList elms]
 
 -- | Extract all 'Card's which are due from an 'Elements'.
+--
 -- Entries may be deleted or modified, as long as the numbers are not changed
 -- and stay associated to their original 'Card'.
 toDueCards :: UTCTime -> Elements -> [(Integer, Card)]
@@ -132,18 +140,21 @@ isDue time Card{tier=t, lastChecked=lc, offset=o} =
   diffUTCTime time lc >= o + tierDiff t
 
 -- These functions use the IO monad for generating random offsets.
+--
 -- TODO: actually implement random offset
 updateOffset :: Card -> IO Card
 updateOffset Card{sides=s, tier=t, lastChecked=lc} = do
   return Card{sides=s, tier=t, lastChecked=lc, offset=0}
 
 -- | Reset a card's 'Tier'.
+--
 -- This also resets the 'lastChecked' and 'offset' times.
 reset :: UTCTime -> Card -> Card
 reset time Card{sides=s} =
   Card{sides=s, tier=minBound, lastChecked=time, offset=0}
 
 -- | Push a 'Card' to the next highest 'Tier'.
+--
 -- Set the 'lastChecked' and 'offset' time accordingly.
 -- Uses the IO monad to access the global random number generator.
 update :: UTCTime -> Card -> IO Card
@@ -197,6 +208,7 @@ tierName SixtyFourDays = "64d"
  -}
 
 -- | Convert an 'Elements' to a string which can be parsed by 'parseElements'.
+--
 -- This string can then be written to a text file for storage.
 elementsToString :: Elements -> String
 elementsToString (Elements e) =
@@ -287,9 +299,11 @@ element time = comment <|> (ECard <$> pCard time) <?> "element"
 --line :: Parser Element
 --line = EComment <$> manyTill anyChar newline
 
+-- | TODO: Implement properly
 parseElements :: UTCTime -> Parser [Element]
 parseElements time = sepEndBy (element time) (some newline) <* eof
 
+-- | TODO: Implement properly
 parseElementsMaybe :: UTCTime -> String -> Maybe Elements
 parseElementsMaybe time str = do
   elms <- parseMaybe (parseElements time) str
