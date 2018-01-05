@@ -19,6 +19,7 @@ module Cards
   , Tier -- Tier stuff
   , tierDiff
   , tierName
+  , Parser -- Other stuff
   , testElements
   ) where
 
@@ -233,7 +234,7 @@ cardToString Card{sides=s, tier=t, lastChecked=lc, offset=o} =
  - Parsing
  -}
 
--- | Not yet implemented.
+-- | Simple alias to clean up type signatures.
 type Parser = Parsec Void String
 
 sc :: Parser ()
@@ -264,8 +265,6 @@ infostring time = do
   let card = createCard time []
   return $ foldr (.) id cardModifiers card
 
--- TODO: implement
--- Possible implementation: Compose (Card -> Card)s and apply to base Card
 innerinfo :: Parser (Card -> Card)
 innerinfo =   try tierInfo
           <|> try lastCheckedInfo
@@ -336,14 +335,15 @@ element time = comment <|> (ECard <$> pCard time) <?> "element"
 
 -- a bunch of elements
 
---line :: Parser Element
---line = EComment <$> manyTill anyChar newline
-
--- | TODO: Implement properly
+-- | A megaparsec parser parsing a list of elements in the format of the original python script.
+--
+-- Use this parser if you want nice error messages to display.
 parseElements :: UTCTime -> Parser [Element]
 parseElements time = sepEndBy (element time) (some newline) <* eof
 
--- | TODO: Implement properly
+-- | The 'parseElements' parser, but simpler to use.
+--
+-- Use this when the user doesn't need to see any error messages.
 parseElementsMaybe :: UTCTime -> String -> Maybe Elements
 parseElementsMaybe time str = do
   elms <- parseMaybe (parseElements time) str
