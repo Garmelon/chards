@@ -26,6 +26,7 @@ module Cards
 
 import           Control.Applicative
 import           Control.Monad
+import           Data.Function
 import           Data.List
 import qualified Data.Map.Strict            as Map
 import           Data.Time
@@ -223,7 +224,7 @@ nomToInteger = (truncate :: Double -> Integer) . realToFrac
 -- This string can then be written to a text file for storage.
 elementsToString :: Elements -> String
 elementsToString (Elements e) =
-  let elms = map snd $ Map.toList e
+  let elms = map snd $ sortBy (compare `on` fst) $ Map.toList e
   in unlines $ intersperse "" $ map (\x -> elementToString x) elms
 
 elementToString :: Element -> String
