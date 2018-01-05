@@ -10,6 +10,7 @@ import           Data.Char
 import           Data.Time
 import           System.Console.Haskeline
 import           System.Console.Haskeline.History
+import           System.Environment
 import           System.Random.Shuffle
 
 type Input = InputT IO
@@ -194,9 +195,28 @@ run elms = do
     Just x       -> do
       outputStrLn $ "Unknown command " ++ show x ++ ". Try \"help\" for a list of commands."
       run elms
-    -- Maybe save cards?
+
+fromFile :: FilePath -> Input ()
+fromFile filepath = do
+  time <- lift $ getCurrentTime
+  content <- lift $ readFile filepath
+  let maybeElms = parseElementsMaybe time content
+  case maybeElms of
+    Nothing -> outputStrLn $ "Could not parse contents of " ++ show filepath ++ "."
+    Just elms -> do
+      newElms <- run elms
+      toFile filepath newElms
+
+toFile :: FilePath -> Elements -> Input ()
+toFile filepath elms = void $ runMaybeT $ do
+  result <- promptYesNo "Do you want to save the cards?"
+  when result $ do
+    lift $ lift $ writeFile filepath $ elementsToString elms
 
 main :: IO ()
-main = do
-  elms <- runInputT inputSettings $ run testElements
-  putStrLn $ elementsToString elms
+main = runInputT inputSettings $ do
+  name <- lift $ getProgName
+  args <- lift $ getArgs
+  if length args == 1
+    then fromFile (args !! 0)
+    else outputStrLn $ "  USAGE: " ++ name ++ " <cards file>"
