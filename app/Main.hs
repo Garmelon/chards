@@ -9,6 +9,7 @@ import Control.Monad.Trans.Maybe
 import Data.Char
 import Data.Time
 import System.Console.Haskeline
+import System.Console.Haskeline.History
 
 type Input = InputT IO
 
@@ -16,7 +17,7 @@ inputSettings :: Settings IO
 inputSettings = Settings
   { complete       = noCompletion
   , historyFile    = Nothing
-  , autoAddHistory = True
+  , autoAddHistory = False
   }
 
 {-
@@ -133,15 +134,16 @@ stats = undefined -- TODO: Use tierName
 run :: Elements -> InputT IO Elements
 run elms = do
   cmd <- getInputLine "%> "
+  let logCmd command = modifyHistory $ addHistoryUnlessConsecutiveDupe command
   case trim ' ' . map toLower <$> cmd of
     Nothing      -> return elms
     Just ""      -> run elms
-    Just "quit"  -> return elms
-    Just "q"     -> return elms
-    Just "learn" -> learn elms >>= run
-    Just "l"     -> learn elms >>= run
-    Just "show"  -> stats elms >> run elms
-    Just "s"     -> stats elms >> run elms
+    Just "quit"  -> logCmd "quit" >> return elms
+    Just "q"     -> logCmd "quit" >> return elms
+    Just "learn" -> logCmd "learn" >> learn elms >>= run
+    Just "l"     -> logCmd "learn" >> learn elms >>= run
+    Just "show"  -> logCmd "show" >> stats elms >> run elms
+    Just "s"     -> logCmd "show" >> stats elms >> run elms
     Just x       -> do
       outputStrLn $ "Unknown command " ++ show x ++ "."
       run elms
