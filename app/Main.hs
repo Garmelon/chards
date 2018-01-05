@@ -57,9 +57,13 @@ spanM f l@(x:xs) = do
 
 -- A few inefficient string formatting functions
 
--- A simple right justify
+-- Simple right justify
 rjust :: Char -> Int -> String -> String
 rjust c l s = replicate (max 0 $ l - length s) c ++ s
+
+-- Simple left justify
+--ljust :: Char -> Int -> String -> String
+--ljust c l s = s ++ replicate (max 0 $ l - length s) c
 
 -- Trims characters from the front and back of a string.
 trim :: Char -> String -> String
@@ -120,6 +124,27 @@ displaySide :: String -> InputT IO ()
 displaySide side = lift (putStrLn side)
 
 {-
+ - Display stats
+ -}
+
+count :: (Card -> Bool) -> Elements -> Int
+count f = length . filter f . map snd . toCards
+
+countTier :: Elements -> Tier -> Int
+countTier e t = count (\card -> tier card == t) e
+
+printBar :: Int -> Int -> String
+printBar maxInt int =
+  let l = (30 * int) `div` maxInt
+      s = replicate l '#'
+  in rjust ' ' 30 s
+
+printLine :: Int -> String -> Int -> String
+printLine maxAmount name amount =
+  rjust ' ' 9 name ++ " | " ++
+  printBar maxAmount amount ++ " | " ++ rjust ' ' 6 (show amount)
+
+{-
  - User prompt.
  -}
 
@@ -129,15 +154,27 @@ learn elms = do
   askElements time elms
 
 stats :: Elements -> Input ()
-stats = undefined -- TODO: Use tierName
+stats elms = do
+  time <- lift $ getCurrentTime
+  outputStrLn $ "     tier |              graph             | amount"
+  outputStrLn $ "----------|--------------------------------|-------"
+  let total = length $ toCards elms
+      due   = length $ toDueCards time elms
+      maxAmount = maximum $ due : map (countTier elms) [minBound..maxBound]
+  mapM_ (outputStrLn . printTierLine maxAmount) [minBound..maxBound]
+  outputStrLn $ "----------|--------------------------------|-------"
+  outputStrLn $ "    total |                                | " ++ rjust ' ' 6 (show total)
+  outputStrLn $ printLine maxAmount "learn" due
+  where
+    printTierLine m t = printLine m (tierName t) (countTier elms t)
 
 help :: Input ()
 help = do
-  outputStrLn "  List of commands:"
-  outputStrLn "h, help  -> display this help"
-  outputStrLn "l, learn -> start revising cards (press ctrl+D to exit)"
-  outputStrLn "q, quit  -> exit program"
-  outputStrLn "s, show  -> show how many cards are in which tiers"
+  outputStrLn "List of commands:"
+  outputStrLn "  h, help  -> display this help"
+  outputStrLn "  l, learn -> start revising cards (press ctrl+D to exit)"
+  outputStrLn "  q, quit  -> exit program"
+  outputStrLn "  s, show  -> show how many cards are in which tiers"
 
 run :: Elements -> Input Elements
 run elms = do
