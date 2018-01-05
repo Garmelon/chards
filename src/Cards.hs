@@ -225,19 +225,25 @@ nomToInteger = (truncate :: Double -> Integer) . realToFrac
 elementsToString :: Elements -> String
 elementsToString (Elements e) =
   let elms = map snd $ sortBy (compare `on` fst) $ Map.toList e
-  in unlines $ intersperse "" $ map (\x -> elementToString x) elms
+  in unlines $ intercalate ["", ""] $ map (\x -> elementToString x) elms
 
-elementToString :: Element -> String
-elementToString (EComment str) = unlines ['#' : str]
+elementToString :: Element -> [String]
+elementToString (EComment str) = ['#' : str]
 elementToString (ECard card)   = cardToString card
 
-cardToString :: Card -> String
-cardToString Card{sides=s, tier=t, lastChecked=lc, offset=o} =
-  let info = ":: {\"level\": " ++ (show $ fromEnum t) ++
-             ", \"last_checked\": " ++ formatTime defaultTimeLocale "%s" lc ++
-             ", \"delay\": " ++ (show $ nomToInteger o) ++
-             "}"
-  in unlines $ info : intersperse "::" s
+cardToString :: Card -> [String]
+cardToString Card{sides=s, tier=t, lastChecked=lc, offset=o}
+  | t == minBound =
+    let info = ":: {\"level\": " ++ (show $ fromEnum t) ++
+               ", \"last_checked\": " ++ formatTime defaultTimeLocale "%s" lc ++
+               "}"
+    in info : intersperse "::" s
+  | otherwise     =
+    let info = ":: {\"level\": " ++ (show $ fromEnum t) ++
+               ", \"last_checked\": " ++ formatTime defaultTimeLocale "%s" lc ++
+               ", \"delay\": " ++ (show $ nomToInteger o) ++
+               "}"
+    in info : intersperse "::" s
 
 {-
  - Parsing
