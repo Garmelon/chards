@@ -25,11 +25,13 @@ module Cards
 import           Control.Applicative
 import           Control.Monad
 import           Data.List
-import qualified Data.Map.Strict      as Map
+import qualified Data.Map.Strict            as Map
 import           Data.Time
+import           Data.Time.Clock.POSIX
 import           Data.Void
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
+import qualified Text.Megaparsec.Char.Lexer as L
 
 -- | Contains 'Card's and comments with a certain ordering.
 --
@@ -222,7 +224,7 @@ elementToString (ECard card)   = cardToString card
 cardToString :: Card -> String
 cardToString Card{sides=s, tier=t, lastChecked=lc, offset=o} =
   let info = ":: {\"level\": " ++ (show $ fromEnum t) ++
-             ", \"last_checked\": " ++ (show $ formatTime defaultTimeLocale "%s" lc) ++
+             ", \"last_checked\": " ++ formatTime defaultTimeLocale "%s" lc ++
              ", \"delay\": " ++ (show $ fromEnum o) ++
              "}"
   in unlines $ info : intersperse "::" s
@@ -233,6 +235,12 @@ cardToString Card{sides=s, tier=t, lastChecked=lc, offset=o} =
 
 -- | Not yet implemented.
 type Parser = Parsec Void String
+
+sc :: Parser ()
+sc = L.space space1 empty empty
+
+symbol :: String -> Parser String
+symbol = L.symbol sc
 
 -- useful parsers
 
@@ -252,12 +260,44 @@ separator = void newline <|> void eof <?> "separator"
 infostring :: UTCTime -> Parser Card
 infostring time = do
   _ <- string ":: "
-  card <- between (string "{") (string "}") (innerinfo time)
-  return card
+  cardModifiers <- between (string "{") (string "}") (innerinfo `sepBy` symbol ",")
+  let card = createCard time []
+  return $ foldr (.) id cardModifiers card
 
 -- TODO: implement
-innerinfo :: UTCTime -> Parser Card
-innerinfo = undefined
+-- Possible implementation: Compose (Card -> Card)s and apply to base Card
+innerinfo :: Parser (Card -> Card)
+innerinfo =   try tierInfo
+          <|> try lastCheckedInfo
+          <|> offsetInfo
+          <?> "tier info or last checked info or offset info"
+
+integer :: Parser Integer
+integer = do
+  sign <- (-1) <$ char '-' <|> 1 <$ char '+' <|> return 1
+  digits <- many digitChar
+  return $ sign * read digits
+
+field :: String -> Parser Integer
+field name = between (char '"') (char '"') (string name) >> symbol ":" >> integer
+
+tierInfo :: Parser (Card -> Card)
+tierInfo = do
+  number <- field "level"
+  let t = toEnum $ fromInteger number
+  return (\card -> card {tier=t})
+
+lastCheckedInfo :: Parser (Card -> Card)
+lastCheckedInfo = do
+  number <- field "last_checked"
+  let lc = posixSecondsToUTCTime $ fromInteger number
+  return (\card -> card {lastChecked=lc})
+
+offsetInfo :: Parser (Card -> Card)
+offsetInfo = do
+  number <- field "delay"
+  let o = fromInteger number
+  return (\card -> card {offset=o})
 
 -- sides of a card
 
