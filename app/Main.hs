@@ -88,7 +88,7 @@ askCountdown time l@((key, card):xs) = do
 -- because they use the prompt functions.
 
 -- Print out info about a card when asking it
-askCardWithInfo :: UTCTime -> Card -> Int -> MaybeT (InputT IO) Card
+askCardWithInfo :: UTCTime -> Card -> Int -> MaybeT Input Card
 askCardWithInfo time card left = do
   let t = rjust ' ' 9 $ tierName $ tier card
       l = rjust ' ' 3 $ show left
@@ -98,7 +98,7 @@ askCardWithInfo time card left = do
 
 -- Ask the sides on a card and reset or update the card accordingly
 -- Doesn't check whether the card is due or not.
-askCard :: UTCTime -> Card -> MaybeT (InputT IO) Card
+askCard :: UTCTime -> Card -> MaybeT Input Card
 askCard time card = do
   (_, unasked) <- spanM askSide $ sides card
   mapM_ showSide $ drop 1 unasked
@@ -123,15 +123,23 @@ displaySide side = lift (putStrLn side)
  - User prompt.
  -}
 
-learn :: Elements -> InputT IO Elements
+learn :: Elements -> Input Elements
 learn elms = do
   time <- lift $ getCurrentTime
   askElements time elms
 
-stats :: Elements -> InputT IO ()
+stats :: Elements -> Input ()
 stats = undefined -- TODO: Use tierName
 
-run :: Elements -> InputT IO Elements
+help :: Input ()
+help = do
+  outputStrLn "  List of commands:"
+  outputStrLn "h, help  -> display this help"
+  outputStrLn "l, learn -> start revising cards (press ctrl+D to exit)"
+  outputStrLn "q, quit  -> exit program"
+  outputStrLn "s, show  -> show how many cards are in which tiers"
+
+run :: Elements -> Input Elements
 run elms = do
   cmd <- getInputLine "%> "
   let logCmd command = modifyHistory $ addHistoryUnlessConsecutiveDupe command
@@ -144,8 +152,10 @@ run elms = do
     Just "l"     -> logCmd "learn" >> learn elms >>= run
     Just "show"  -> logCmd "show" >> stats elms >> run elms
     Just "s"     -> logCmd "show" >> stats elms >> run elms
+    Just "help"  -> logCmd "help" >> help >> run elms
+    Just "h"     -> logCmd "help" >> help >> run elms
     Just x       -> do
-      outputStrLn $ "Unknown command " ++ show x ++ "."
+      outputStrLn $ "Unknown command " ++ show x ++ ". Try \"help\" for a list of commands."
       run elms
     -- Maybe save cards?
 
