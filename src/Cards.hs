@@ -21,7 +21,6 @@ module Cards
   , tierDiff
   , tierName
   , Parser -- Other stuff
-  , testElements
   ) where
 
 import           Control.Applicative
@@ -76,21 +75,6 @@ data Tier = Unrevised
           | OneDay | TwoDays | FourDays | EightDays
           | SixteenDays | ThirtyTwoDays | SixtyFourDays
   deriving (Show, Eq, Ord, Enum, Bounded)
-
--- | A 'Elements' containing some cards and some comments, for testing.
---
--- To be removed.
-testElements :: Elements
-testElements = Elements . Map.fromList. zip [1..] $
-  [ ca ["first card", "really"]
-  , ca ["second card", "really"]
-  , co "first comment"
-  , ca ["third card", "really"]
-  , co "second comment"
-  ]
-  where ca = ECard . createCard someutctime
-        co = EComment
-        someutctime = UTCTime (ModifiedJulianDay 0) (secondsToDiffTime 0)
 
 {-
  - Elements stuff
