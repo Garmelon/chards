@@ -123,7 +123,7 @@ showSide side = do
   promptContinue "--> Continue"
 
 displaySide :: String -> InputT IO ()
-displaySide side = lift (putStrLn side)
+displaySide side = outputStr side
 
 {-
  - Display stats
