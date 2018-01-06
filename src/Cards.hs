@@ -89,7 +89,8 @@ updateElements (Elements old) (Elements new) = Elements $ Map.union new old
 -- As long as the same numbers are assosiated to the same cards as they were
 -- originally, this can safely be used to update the original 'Elements'.
 fromCards :: [(Integer, Card)] -> Elements
-fromCards = Elements . Map.fromList . mapSnd fromCard
+fromCards = Elements . Map.fromList . mapSnd ECard
+  where mapSnd f = map (\(a, b) -> (a, f b))
 
 -- | Extract all 'Card's from an 'Elements'.
 --
@@ -97,7 +98,7 @@ fromCards = Elements . Map.fromList . mapSnd fromCard
 -- and stay associated to their original 'Card'.
 toCards :: Elements -> [(Integer, Card)]
 toCards (Elements elms) =
-  [(key, card) | (key, Just card) <- mapSnd toCard $ Map.toList elms]
+  [(key, card) | (key, ECard card) <- Map.toList elms]
 
 -- | Extract all 'Card's which are due from an 'Elements'.
 --
@@ -105,20 +106,6 @@ toCards (Elements elms) =
 -- and stay associated to their original 'Card'.
 toDueCards :: UTCTime -> Elements -> [(Integer, Card)]
 toDueCards time = filter (isDue time . snd) . toCards
-
-mapSnd :: (b -> c) -> [(a, b)] -> [(a, c)]
-mapSnd f l = [(a, f b) | (a, b) <- l]
-
-{-
- - Element stuff
- -}
-
-toCard :: Element -> Maybe Card
-toCard (ECard c) = Just c
-toCard _         = Nothing
-
-fromCard :: Card -> Element
-fromCard = ECard
 
 {-
  - Card stuff
@@ -211,24 +198,23 @@ nomToInteger = (truncate :: Double -> Integer) . realToFrac
 elementsToString :: Elements -> String
 elementsToString (Elements e) =
   let elms = map snd $ sortBy (compare `on` fst) $ Map.toList e
-  in unlines $ intercalate ["", ""] $ map (\x -> elementToString x) elms
+  in unlines $ intercalate ["", ""] $ map elementToLines elms
 
-elementToString :: Element -> [String]
-elementToString (EComment str) = ['#' : str]
-elementToString (ECard card)   = cardToString card
+elementToLines :: Element -> [String]
+elementToLines (EComment str) = lines ('#' : str)
+elementToLines (ECard card)   = cardToLines card
 
-cardToString :: Card -> [String]
-cardToString Card{sides=s, tier=t, lastChecked=lc, offset=o}
-  | t == minBound =
-    let info = ":: {\"level\": " ++ (show $ fromEnum t) ++
-               "}"
-    in info : intersperse "::" s
-  | otherwise     =
-    let info = ":: {\"level\": " ++ (show $ fromEnum t) ++
-               ", \"last_checked\": " ++ formatTime defaultTimeLocale "%s" lc ++
-               ", \"delay\": " ++ (show $ nomToInteger o) ++
-               "}"
-    in info : intersperse "::" s
+cardToLines :: Card -> [String]
+cardToLines Card{sides=s, tier=t, lastChecked=lc, offset=o} =
+  let infoTier = show $ fromEnum t
+      infoLastChecked = formatTime defaultTimeLocale "%s" lc
+      infoOffset = show $ nomToInteger o
+      info = ":: {\"level\": " ++ infoTier ++
+             if t /= minBound
+               then ", \"last_checked\": " ++ infoLastChecked ++
+                    ", \"delay\": " ++ infoOffset ++ "}"
+               else "}"
+  in info : intercalate ["::"] (map lines s)
 
 {-
  - Parsing
@@ -237,13 +223,14 @@ cardToString Card{sides=s, tier=t, lastChecked=lc, offset=o}
 -- | Simple alias to clean up type signatures.
 type Parser = Parsec Void String
 
--- useful parsers
-
 sc :: Parser ()
 sc = L.space space1 empty empty
 
 symbol :: String -> Parser String
 symbol = L.symbol sc
+
+nonemptyLine :: Parser String
+nonemptyLine = anyChar `someTill` newline
 
 -- Combines try and lookAhead: Never modifies the stack.
 followedBy :: Parser a -> Parser ()
@@ -260,7 +247,7 @@ separator = void newline <|> void eof <?> "separator"
 -- infostring
 
 infostring :: UTCTime -> Parser Card
-infostring time = do
+infostring time = label "infostring" $ do
   _ <- string ":: "
   cardModifiers <- between (string "{") (string "}") (innerinfo `sepBy` symbol ",")
   let card = createCard time []
@@ -270,7 +257,7 @@ innerinfo :: Parser (Card -> Card)
 innerinfo =   try tierInfo
           <|> try lastCheckedInfo
           <|> offsetInfo
-          <?> "tier info or last checked info or offset info"
+          <?> "inner info"
 
 integer :: Parser Integer
 integer = do
@@ -302,16 +289,16 @@ offsetInfo = do
 -- sides of a card
 
 side :: Parser String
-side = anyChar `manyTill` followedBy end
-  where end = newline >> (void cardSeparator <|> void separator)
+side = unlines <$> (nonemptyLine `someTill` followedBy end)
+  where end = void cardSeparator <|> void separator
 
 pSides :: Parser [String]
-pSides = side `sepBy1` (try $ newline >> cardSeparator >> newline)
+pSides = side `sepBy1` (try $ cardSeparator >> newline)
 
 -- an actual card
 
 pCard :: UTCTime -> Parser Card
-pCard time = cardInfo time <|> cardNoInfo time
+pCard time = cardInfo time <|> cardNoInfo time <?> "card"
 
 cardInfo :: UTCTime -> Parser Card
 cardInfo time = do
@@ -328,8 +315,10 @@ cardNoInfo time = do
 -- an element
 
 comment :: Parser Element
-comment = char '#' >> EComment <$> (anyChar `manyTill` followedBy end)
-  where end = newline >> separator
+comment = do
+  _ <- char '#'
+  text <- nonemptyLine `manyTill` followedBy separator
+  return $ EComment $ unlines text
 
 element :: UTCTime -> Parser Element
 element time = comment <|> (ECard <$> pCard time) <?> "element"
@@ -339,13 +328,13 @@ element time = comment <|> (ECard <$> pCard time) <?> "element"
 -- | A megaparsec parser parsing a list of elements in the format of the original python script.
 --
 -- Use this parser if you want nice error messages to display.
-parseElements :: UTCTime -> Parser [Element]
-parseElements time = sepEndBy (element time) (some newline) <* eof
+parseElements :: UTCTime -> Parser Elements
+parseElements time = do
+  elms <- (element time `sepEndBy` some newline) <* label "end of file" eof
+  return $ Elements $ Map.fromList $ zip [1..] elms
 
 -- | The 'parseElements' parser, but simpler to use.
 --
 -- Use this when the user doesn't need to see any error messages.
 parseElementsMaybe :: UTCTime -> String -> Maybe Elements
-parseElementsMaybe time str = do
-  elms <- parseMaybe (parseElements time) str
-  return $ Elements $ Map.fromList $ zip [1..] elms
+parseElementsMaybe time = parseMaybe (parseElements time)
