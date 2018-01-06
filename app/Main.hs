@@ -43,7 +43,7 @@ promptYesNo question = do
 
 -- Wait until user pressed Enter
 promptContinue :: String -> MaybeT Input ()
-promptContinue question = void $ MaybeT $ getInputLine $ question ++ "[Enter] "
+promptContinue question = void $ MaybeT $ getInputLine $ question ++ " [Enter] "
 
 -- Just span, but with monads.
 spanM :: (Monad m) => (a -> m Bool) -> [a] -> m ([a], [a])
@@ -96,7 +96,7 @@ askCountdown time l@((key, card):xs) = do
 askCardWithInfo :: UTCTime -> Card -> Int -> MaybeT Input Card
 askCardWithInfo time card left = do
   let t = rjust ' ' 9 $ tierName $ tier card
-      l = rjust ' ' 3 $ show left
+      l = rjust ' ' 5 $ show left
   lift $ outputStrLn ""
   lift $ outputStrLn $ "-----< tier: " ++ t ++ ", left: " ++ l ++ " >-----"
   askCard time card
@@ -114,12 +114,12 @@ askCard time card = do
 askSide :: String -> MaybeT (InputT IO) Bool
 askSide side = do
   lift $ displaySide side
-  promptYesNo "Did you know that side?"
+  promptYesNo "--> Did you know that side?"
 
 showSide :: String -> MaybeT (InputT IO) ()
 showSide side = do
   lift $ displaySide side
-  promptContinue "Continue"
+  promptContinue "--> Continue"
 
 displaySide :: String -> InputT IO ()
 displaySide side = lift (putStrLn side)
@@ -209,7 +209,7 @@ fromFile filepath = do
 
 toFile :: FilePath -> Elements -> Input ()
 toFile filepath elms = void $ runMaybeT $ do
-  result <- promptYesNo "Do you want to save the cards?"
+  result <- promptYesNo "Save the cards?"
   when result $ do
     lift $ lift $ writeFile filepath $ elementsToString elms
 
