@@ -12,6 +12,7 @@ import           System.Console.Haskeline
 import           System.Console.Haskeline.History
 import           System.Environment
 import           System.Random.Shuffle
+import qualified Text.Megaparsec                  as Mega
 
 type Input = InputT IO
 
@@ -200,10 +201,10 @@ fromFile :: FilePath -> Input ()
 fromFile filepath = do
   time <- lift $ getCurrentTime
   content <- lift $ readFile filepath
-  let maybeElms = parseElementsMaybe time content
-  case maybeElms of
-    Nothing -> outputStrLn $ "Could not parse contents of " ++ show filepath ++ "."
-    Just elms -> do
+  let result = Mega.parse (parseElements time) filepath content
+  case result of
+    Left parseError -> outputStrLn $ Mega.parseErrorPretty parseError
+    Right elms      -> do
       newElms <- run elms
       toFile filepath newElms
 
