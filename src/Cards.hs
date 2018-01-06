@@ -193,15 +193,17 @@ tierName SixteenDays   = "16d"
 tierName ThirtyTwoDays = "32d"
 tierName SixtyFourDays = "64d"
 
-{-
- - Converting to String
- -}
+-- Two more utility functions for dealing with NominalDiffTimes
 
 integerToNom :: Integer -> NominalDiffTime
 integerToNom = fromInteger
 
 nomToInteger :: NominalDiffTime -> Integer
 nomToInteger = (truncate :: Double -> Integer) . realToFrac
+
+{-
+ - Converting to String
+ -}
 
 -- | Convert an 'Elements' to a string which can be parsed by 'parseElements'.
 --
@@ -235,14 +237,15 @@ cardToString Card{sides=s, tier=t, lastChecked=lc, offset=o}
 -- | Simple alias to clean up type signatures.
 type Parser = Parsec Void String
 
+-- useful parsers
+
 sc :: Parser ()
 sc = L.space space1 empty empty
 
 symbol :: String -> Parser String
 symbol = L.symbol sc
 
--- useful parsers
-
+-- Combines try and lookAhead: Never modifies the stack.
 followedBy :: Parser a -> Parser ()
 followedBy = void . try . lookAhead
 
