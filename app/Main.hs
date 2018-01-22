@@ -99,7 +99,8 @@ askCardWithInfo time card left = do
   let t = rjust ' ' 9 $ tierName $ tier card
       l = rjust ' ' 5 $ show left
   lift $ outputStrLn ""
-  lift $ outputStrLn $ "-----< tier: " ++ t ++ ", left: " ++ l ++ " >-----"
+  lift $ outputStrLn ""
+  lift $ outputStrLn $ "─────< tier: " ++ t ++ ", left: " ++ l ++ " >─────"
   askCard time card
 
 -- Ask the sides on a card and reset or update the card accordingly
@@ -115,12 +116,12 @@ askCard time card = do
 askSide :: String -> MaybeT (InputT IO) Bool
 askSide side = do
   lift $ displaySide side
-  promptYesNo "--> Did you know that side?"
+  promptYesNo "──> Did you know that side?"
 
 showSide :: String -> MaybeT (InputT IO) ()
 showSide side = do
   lift $ displaySide side
-  promptContinue "--> Continue"
+  promptContinue "──> Continue"
 
 displaySide :: String -> InputT IO ()
 displaySide side = outputStr side
@@ -138,13 +139,13 @@ countTier e t = count (\card -> tier card == t) e
 printBar :: Int -> Int -> String
 printBar maxInt int =
   let l = (30 * int) `div` maxInt
-      s = replicate l '#'
+      s = replicate l '█'
   in rjust ' ' 30 s
 
 printLine :: Int -> String -> Int -> String
 printLine maxAmount name amount =
-  rjust ' ' 9 name ++ " | " ++
-  printBar maxAmount amount ++ " | " ++ rjust ' ' 6 (show amount)
+  rjust ' ' 9 name ++ " │ " ++
+  printBar maxAmount amount ++ " │ " ++ rjust ' ' 6 (show amount)
 
 {-
  - User prompt.
@@ -158,14 +159,14 @@ learn elms = do
 stats :: Elements -> Input ()
 stats elms = do
   time <- lift $ getCurrentTime
-  outputStrLn $ "     tier |              graph             | amount"
-  outputStrLn $ "----------|--------------------------------|-------"
+  outputStrLn $ "     tier │              graph             │ amount"
+  outputStrLn $ "──────────┼────────────────────────────────┼───────"
   let total = length $ toCards elms
       due   = length $ toDueCards time elms
       maxAmount = maximum $ due : map (countTier elms) [minBound..maxBound]
   mapM_ (outputStrLn . printTierLine maxAmount) [minBound..maxBound]
-  outputStrLn $ "----------|--------------------------------|-------"
-  outputStrLn $ "    total |                                | " ++ rjust ' ' 6 (show total)
+  outputStrLn $ "──────────┼────────────────────────────────┼───────"
+  outputStrLn $ "    total │                                │ " ++ rjust ' ' 6 (show total)
   outputStrLn $ printLine maxAmount "learn" due
   where
     printTierLine m t = printLine m (tierName t) (countTier elms t)
