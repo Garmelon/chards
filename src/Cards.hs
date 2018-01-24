@@ -330,7 +330,7 @@ element time = comment <|> (ECard <$> pCard time) <?> "element"
 -- Use this parser if you want nice error messages to display.
 parseElements :: UTCTime -> Parser Elements
 parseElements time = do
-  elms <- (element time `sepEndBy` some newline) <* label "end of file" eof
+  elms <- many newline *> (element time `sepEndBy` some newline) <* label "end of file" eof
   return $ Elements $ Map.fromList $ zip [1..] elms
 
 -- | The 'parseElements' parser, but simpler to use.
