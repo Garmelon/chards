@@ -136,11 +136,22 @@ count f = length . filter f . map snd . toCards
 countTier :: Elements -> Tier -> Int
 countTier e t = count (\card -> tier card == t) e
 
+blockChar :: Int -> Char
+blockChar 0 = ' '
+blockChar 1 = '▏'
+blockChar 2 = '▎'
+blockChar 3 = '▍'
+blockChar 4 = '▌'
+blockChar 5 = '▋'
+blockChar 6 = '▊'
+blockChar 7 = '▉'
+blockChar _ = '█'
+
 printBar :: Int -> Int -> String
 printBar maxInt int =
-  let l = (30 * int) `div` maxInt
-      s = replicate l '█'
-  in rjust ' ' 30 s
+  let length = (8 * 30 * int) `div` maxInt
+      lengths = iterate (max 0 . subtract 8) length
+  in  map blockChar $ take 30 $ lengths
 
 printLine :: Int -> String -> Int -> String
 printLine maxAmount name amount =
