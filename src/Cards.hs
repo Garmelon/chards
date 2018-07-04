@@ -23,7 +23,6 @@ module Cards
   , Parser -- Other stuff
   ) where
 
-import           Control.Applicative
 import           Control.Monad
 import           Data.Function
 import           Data.List
